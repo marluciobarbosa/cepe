@@ -71,7 +71,7 @@ O sistema adota uma abordagem injetora para o tratamento de dados:
 ## 5. Instruções de Uso
 
 1. Acesse a página da ferramenta em https://marluciobarbosa.github.io/cepe.
-2. **Etapa 1:** Realize o upload dos arquivos `.csv` referentes aos dados Quantitativos e Qualitativos.
+2. **Etapa 1:** Realize o upload dos arquivos `.csv` referentes aos dados Quantitativos e Qualitativos (veja os arquivos .CSV de exemplo para replicar a estrutura).
 3. **Configuração:** Defina o número de vagas a classificar (Corte) no campo indicado.
 4. Clique em **"Calcular Classificação Final"**.
 5. Analise os gráficos de diagnóstico e a tabela analítica.
