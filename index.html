@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema Integrado de Alocação de Vagas Docentes - UFRRJ (CEPE)</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- MathJax -->
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    <!-- PapaParse -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;700&family=Lato:wght@400;700&display=swap');
+        
+        body { font-family: 'Lato', sans-serif; }
+        h1, h2, h3 { font-family: 'Roboto Slab', serif; }
+        
+        /* Cores Institucionais UFRRJ (Manual de Identidade Visual) */
+        :root {
+            --ufrrj-blue: #004388;      /* Azul Institucional RGB 0 67 136 */
+            --ufrrj-yellow: #FFCC00;    /* Amarelo Institucional RGB 255 204 0 */
+            --ufrrj-green: #008237;     /* Verde Institucional RGB 0 130 55 */
+            --ufrrj-red: #BC1413;       /* Vermelho (Brasão) */
+        }
+
+        .math-block {
+            background-color: #f8fafc;
+            border-left: 4px solid var(--ufrrj-blue);
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+        
+        /* Scrollbar fina para a tabela */
+        .custom-scrollbar::-webkit-scrollbar {
+            height: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        /* Ajustes para renderização do MathJax */
+        mjx-container {
+            font-size: 110% !important;
+        }
+        
+        /* FORÇAR COR NO MATHJAX DENTRO DE CABEÇALHOS ESCUROS */
+        th mjx-container, th .mjx-chtml, th svg, th .MathJax {
+            color: inherit !important;
+            fill: currentColor !important;
+            font-size: 1.1em !important; /* Leve aumento para legibilidade */
+        }
+
+        /* CONFIGURAÇÕES DE IMPRESSÃO */
+        @media print {
+            body { 
+                -webkit-print-color-adjust: exact; 
+                print-color-adjust: exact; 
+                background: white;
+            }
+            .no-print { display: none !important; }
+            
+            /* Remove posicionamento fixo/sticky na impressão */
+            header.sticky {
+                position: static !important;
+                background-color: var(--ufrrj-blue) !important;
+                color: white !important;
+                border-bottom: 2px solid #FFCC00 !important;
+            }
+            
+            /* Remove sticky das tabelas */
+            th.sticky, td.sticky {
+                position: static !important;
+                overflow: visible !important;
+            }
+            
+            /* Configuração da Página Paisagem */
+            @page { 
+                size: landscape; 
+                margin: 0.5cm; 
+            }
+            
+            main { max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
+            
+            /* Ocultar Gráficos na Impressão (Formalidade) */
+            .chart-container-print {
+                display: none !important;
+            }
+            
+            /* Ajuste de Tabela */
+            table { font-size: 7pt !important; width: 100% !important; }
+            th, td { padding: 2px 4px !important; border: 1px solid #ccc !important; }
+            
+            thead th {
+                background-color: #f0f0f0 !important;
+                color: #000 !important;
+            }
+            
+            /* Garantir que as cores de fundo (como o verde/azul institucional) saiam na impressão */
+            .bg-\[\#004388\] { background-color: #004388 !important; color: white !important; }
+            .bg-\[\#008237\] { background-color: #008237 !important; color: white !important; }
+            .text-\[\#FFCC00\] { color: #FFCC00 !important; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <!-- Cabeçalho Institucional -->
+    <header class="bg-[#004388] text-white shadow-lg sticky top-0 z-50 border-b-4 border-[#FFCC00]">
+        <div class="container mx-auto px-6 py-4 flex justify-between items-center">
+            <div>
+                <h1 class="text-xl md:text-2xl font-bold tracking-tight font-serif leading-tight">
+                    PROLADI/UFRRJ
+                </h1>
+                <p class="text-sm text-yellow-200 mt-1">Sistema de Apoio ao CEPE - Alocação de Vagas</p>
+            </div>
+            <div class="text-right hidden md:block pl-4">
+                <p class="text-xs font-mono">v2.7.0 - Edital CEPE 2025</p>
+                <p class="text-xs text-blue-100">Padrão Visual: Manual UFRRJ v1.2</p>
+            </div>
+        </div>
+    </header>
+
+    <!-- Conteúdo Principal -->
+    <main class="flex-grow container mx-auto px-4 py-8 max-w-[98%]">
+        
+        <!-- Painel de Configuração e Upload -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8 border border-slate-200 no-print">
+            <h2 class="text-xl font-bold mb-4 text-[#004388] border-b pb-2 flex items-center">
+                <span class="bg-[#004388] text-white text-sm font-semibold mr-2 px-2.5 py-0.5 rounded">Etapa 1</span>
+                Parâmetros e Importação
+            </h2>
+
+            <!-- Configuração de Vagas -->
+            <div class="mb-6 p-4 bg-yellow-50 border border-[#FFCC00] rounded-md flex items-center gap-4">
+                <div class="flex-shrink-0">
+                    <svg class="w-6 h-6 text-[#004388]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                </div>
+                <div class="flex-grow">
+                    <label for="vacancyCount" class="block text-sm font-bold text-[#004388] mb-1">
+                        Número de Vagas a Classificar (Corte) <span class="text-red-600">*</span>
+                    </label>
+                    <p class="text-xs text-slate-500 mb-2">Defina quantos departamentos serão destacados como "Classificados" na lista final.</p>
+                </div>
+                <div>
+                    <input type="number" id="vacancyCount" value="5" min="1" max="100" class="w-24 px-3 py-2 border border-slate-300 rounded-md focus:ring-[#004388] focus:border-[#004388] font-bold text-lg text-center text-[#004388] shadow-sm">
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Upload Quantitativo -->
+                <div>
+                    <h3 class="font-semibold text-[#004388] mb-2">1. Arquivo Quantitativo (CSV)</h3>
+                    <p class="text-xs text-slate-500 mb-2">Solicitações de Vagas (CHMD, Graduação, etc.)</p>
+                    <label class="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-lg cursor-pointer bg-slate-50 hover:bg-blue-50 transition-all" id="drop-quant">
+                        <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                            <svg class="w-8 h-8 mb-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            <p class="text-xs text-slate-500"><span class="font-bold">Clique</span> para carregar</p>
+                        </div>
+                        <input id="inputQuant" type="file" accept=".csv" class="hidden" />
+                    </label>
+                    <div id="statusQuant" class="mt-2 text-xs font-semibold text-slate-400">Aguardando arquivo...</div>
+                </div>
+
+                <!-- Upload Qualitativo -->
+                <div>
+                    <h3 class="font-semibold text-[#004388] mb-2">2. Arquivo Qualitativo (CSV)</h3>
+                    <p class="text-xs text-slate-500 mb-2">Avaliações das Solicitações (Critérios 1 a 5)</p>
+                    <label class="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-lg cursor-pointer bg-slate-50 hover:bg-green-50 transition-all" id="drop-qual">
+                        <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                            <svg class="w-8 h-8 mb-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                            <p class="text-xs text-slate-500"><span class="font-bold">Clique</span> para carregar</p>
+                        </div>
+                        <input id="inputQual" type="file" accept=".csv" class="hidden" />
+                    </label>
+                    <div id="statusQual" class="mt-2 text-xs font-semibold text-slate-400">Aguardando arquivo...</div>
+                </div>
+            </div>
+
+            <div id="processBtnArea" class="mt-6 text-center hidden">
+                <button onclick="processAllData()" class="bg-[#004388] hover:bg-[#003366] text-white font-bold py-3 px-8 rounded shadow-lg transform transition hover:scale-105 flex items-center mx-auto border-b-4 border-[#FFCC00]">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                    Calcular Classificação Final
+                </button>
+            </div>
+            
+            <div id="errorArea" class="mt-4 p-4 bg-red-100 text-red-700 rounded hidden border border-red-200 text-sm"></div>
+        </div>
+
+        <!-- Explicação -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8 border border-slate-200 no-print">
+            <h2 class="text-xl font-bold mb-4 text-[#004388] border-b pb-2 flex items-center">
+                <span class="bg-slate-100 text-slate-800 text-sm font-semibold mr-2 px-2.5 py-0.5 rounded">Etapa 2</span>
+                Metodologia do CEPE
+            </h2>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="bg-slate-50 p-4 rounded border border-slate-100">
+                    <h3 class="font-bold text-[#004388] mb-2 text-sm uppercase">Quantitativo ($FI_i$)</h3>
+                    <div class="text-xs font-mono bg-white p-2 border rounded text-slate-700">
+                        $$ W_i = 0,25 \cdot CHDEG + 0,15 \cdot CHDPG $$
+                        $$ + 0,10 \cdot CHDAA + 0,25 \cdot CHMD $$
+                        $$ + 0,25 \cdot CHDAE $$
+                        $$ FI_i = \frac{W_i}{W_{\max}} $$
+                    </div>
+                </div>
+                <div class="bg-slate-50 p-4 rounded border border-slate-100">
+                    <h3 class="font-bold text-[#008237] mb-2 text-sm uppercase">Qualitativo ($QI_i$)</h3>
+                    <div class="text-xs font-mono bg-white p-2 border rounded text-slate-700">
+                        $$ \bar{S}_i = \frac{1}{K}\sum_{k=1}^K s_{ik}, \quad s_{ik} \in [1,5] $$
+                        $$ QI_i = \frac{\bar{S}_i}{5} $$
+                    </div>
+                </div>
+                <div class="bg-blue-50 p-4 rounded border border-blue-100">
+                    <h3 class="font-bold text-[#004388] mb-2 text-sm uppercase">Fração Ideal Total</h3>
+                    <div class="text-xs font-mono bg-white p-2 border rounded text-slate-700 font-bold">
+                        $$ \alpha=0.5, \beta=0.5 $$
+                        $$ FI_i^{\text{total}} = 100 \cdot [\alpha FI_i + \beta QI_i] $$
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resultados -->
+        <div id="resultsSection" class="hidden space-y-8">
+            
+            <!-- Diagnóstico Visual (Com ajuste para impressão) -->
+            <div class="chart-container-print bg-white rounded-lg shadow-md p-6 border border-slate-200">
+                <h2 class="text-xl font-bold mb-4 text-[#004388] border-b pb-2">Diagnóstico Visual</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 h-80">
+                    <div class="relative w-full h-full">
+                         <canvas id="rankingChart"></canvas>
+                    </div>
+                    <div class="relative w-full h-full">
+                        <canvas id="scatterChart"></canvas>
+                   </div>
+                </div>
+            </div>
+
+            <!-- Tabela -->
+            <div class="bg-white rounded-lg shadow-md p-6 border border-slate-200">
+                <div class="flex justify-between items-end mb-4 border-b pb-2 no-print">
+                    <h2 class="text-2xl font-bold text-[#004388]">Classificação Final CEPE - Relatório Analítico</h2>
+                    <button onclick="window.print()" class="text-sm bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold py-1 px-3 rounded border border-slate-300 flex items-center">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                        Imprimir Relatório
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto custom-scrollbar">
+                    <table class="w-full text-xs text-left text-slate-600 border-collapse whitespace-nowrap">
+                        <thead class="text-[10px] text-white uppercase bg-[#004388] leading-tight">
+                            <tr>
+                                <!-- Cabeçalhos Principais -->
+                                <th rowspan="2" class="px-2 py-2 text-center border border-[#003B75] w-10 sticky left-0 bg-[#004388] z-10">Pos</th>
+                                <th rowspan="2" class="px-2 py-2 border border-[#003B75] sticky left-10 bg-[#004388] z-10 min-w-[250px]">Departamento / Resp.</th>
+                                
+                                <th colspan="3" class="px-2 py-1 text-center border border-[#003B75] bg-[#003B75]">Resultados Finais</th>
+                                
+                                <th colspan="5" class="px-2 py-1 text-center border border-[#003B75] bg-slate-600">Variáveis Quantitativas (Brutas)</th>
+                                
+                                <th colspan="5" class="px-2 py-1 text-center border border-[#003B75] bg-[#008237]">Critérios Qualitativos (1-5)</th>
+                            </tr>
+                            <tr>
+                                <!-- Sub-cabeçalhos Resultados -->
+                                <!-- Ajuste: Cor herdada explicitamente para o MathJax -->
+                                <th class="px-2 py-2 text-right border border-[#003B75] bg-[#003B75] text-[#FFCC00] font-bold" title="Fração Ideal Total">
+                                    \( \mathbf{FI^{\text{total}}} \)
+                                </th>
+                                <th class="px-2 py-2 text-right border border-[#003B75] bg-[#003B75]/80" title="Índice Quantitativo Normalizado">
+                                    \( FI_i \)
+                                </th>
+                                <th class="px-2 py-2 text-right border border-[#003B75] bg-[#003B75]/80" title="Índice Qualitativo Normalizado">
+                                    \( QI_i \)
+                                </th>
+                                
+                                <!-- Sub-cabeçalhos Quantitativos -->
+                                <th class="px-2 py-2 text-right border border-gray-500 bg-slate-200 text-slate-800 font-mono" title="Graduação">CHDEG</th>
+                                <th class="px-2 py-2 text-right border border-gray-500 bg-slate-200 text-slate-800 font-mono" title="Pós-Graduação">CHDPG</th>
+                                <th class="px-2 py-2 text-right border border-gray-500 bg-slate-200 text-slate-800 font-mono" title="Atividades Acadêmicas">CHDAA</th>
+                                <th class="px-2 py-2 text-right border border-gray-500 bg-slate-200 text-slate-800 font-mono" title="Média Didática">CHMD</th>
+                                <th class="px-2 py-2 text-right border border-gray-500 bg-slate-200 text-slate-800 font-mono" title="Extensão">CHDAE</th>
+                                
+                                <!-- Sub-cabeçalhos Qualitativos -->
+                                <th class="px-2 py-2 text-center border border-[#008237] bg-green-50 text-[#008237] font-mono">C1</th>
+                                <th class="px-2 py-2 text-center border border-[#008237] bg-green-50 text-[#008237] font-mono">C2</th>
+                                <th class="px-2 py-2 text-center border border-[#008237] bg-green-50 text-[#008237] font-mono">C3</th>
+                                <th class="px-2 py-2 text-center border border-[#008237] bg-green-50 text-[#008237] font-mono">C4</th>
+                                <th class="px-2 py-2 text-center border border-[#008237] bg-green-50 text-[#008237] font-mono">C5</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rankingBody"></tbody>
+                    </table>
+                </div>
+                <div class="mt-2 text-[10px] text-slate-500 italic">
+                    Legenda: <strong>C1..C5</strong>: Critérios de avaliação qualitativa (Escala 1 a 5). <strong>CH...</strong>: Cargas Horárias brutas (não normalizadas).
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-slate-200 text-slate-600 py-6 mt-auto no-print">
+        <div class="container mx-auto px-6 text-center text-sm">
+            <p class="font-bold text-[#004388]">Universidade Federal Rural do Rio de Janeiro</p>
+            <p class="text-xs mt-1">Ferramenta de apoio ao Conselho de Ensino, Pesquisa e Extensão (CEPE).</p>
+        </div>
+    </footer>
+
+    <script>
+        // --- Configuração e Estado ---
+        const state = { quantFile: null, qualFile: null };
+        const CONFIG = {
+            alpha: 0.50, beta: 0.50,
+            weights: { CHDEG: 0.25, CHDPG: 0.15, CHDAA: 0.10, CHMD: 0.25, CHDAE: 0.25 }
+        };
+
+        // --- Upload Logic ---
+        setupUpload('inputQuant', 'statusQuant', 'quantFile', 'drop-quant');
+        setupUpload('inputQual', 'statusQual', 'qualFile', 'drop-qual');
+
+        function setupUpload(inputId, statusId, stateKey, dropId) {
+            const input = document.getElementById(inputId);
+            const status = document.getElementById(statusId);
+            const drop = document.getElementById(dropId);
+
+            input.addEventListener('change', (e) => handleFile(e.target.files[0]));
+            drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('bg-blue-100'); });
+            drop.addEventListener('dragleave', (e) => { e.preventDefault(); drop.classList.remove('bg-blue-100'); });
+            drop.addEventListener('drop', (e) => {
+                e.preventDefault(); drop.classList.remove('bg-blue-100');
+                handleFile(e.dataTransfer.files[0]);
+            });
+
+            function handleFile(file) {
+                if (!file) return;
+                state[stateKey] = file;
+                status.textContent = `Carregado: ${file.name}`;
+                status.classList.remove('text-slate-400');
+                status.classList.add('text-[#008237]');
+                drop.classList.add('border-[#008237]', 'bg-green-50');
+                if (state.quantFile && state.qualFile) document.getElementById('processBtnArea').classList.remove('hidden');
+            }
+        }
+
+        // --- Core Processing ---
+        async function processAllData() {
+            try {
+                document.getElementById('errorArea').classList.add('hidden');
+                
+                // Ler quantidade de vagas a classificar
+                const vacancyInput = document.getElementById('vacancyCount').value;
+                const limit = parseInt(vacancyInput) || 5;
+
+                const rawQuant = await parseCSV(state.quantFile);
+                const rawQual = await parseCSV(state.qualFile);
+
+                const quantList = processQuantDataList(rawQuant);
+                const qualMap = processQualDataMap(rawQual);
+
+                const mergedData = mergeDatasetsFIFO(quantList, qualMap);
+                const finalRanking = calculateFinalScores(mergedData);
+
+                renderTable(finalRanking, limit);
+                renderCharts(finalRanking, limit);
+                
+                document.getElementById('resultsSection').classList.remove('hidden');
+                document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+
+            } catch (err) {
+                const errDiv = document.getElementById('errorArea');
+                errDiv.textContent = `Erro no processamento: ${err.message}`;
+                errDiv.classList.remove('hidden');
+                console.error(err);
+            }
+        }
+
+        function parseCSV(file) {
+            return new Promise((resolve, reject) => {
+                Papa.parse(file, {
+                    header: true, skipEmptyLines: true, encoding: "UTF-8",
+                    complete: (results) => resolve(results.data),
+                    error: (err) => reject(err)
+                });
+            });
+        }
+
+        function processQuantDataList(data) {
+            const list = [];
+            const headers = Object.keys(data[0]);
+            const findCol = (keys) => headers.find(h => keys.some(k => h.toLowerCase().includes(k.toLowerCase())));
+            
+            const colDept = findCol(['Departamento']);
+            const colResp = findCol(['Responsável', 'Preenchimento']);
+            const colCHMD = findCol(['CHMD', 'Média']);
+            const colCHDEG = findCol(['CHDEG', 'Graduação']);
+            const colCHDPG = findCol(['CHDPG', 'Pós']);
+            const colCHDAA = findCol(['CHDAA', 'Atividades']);
+            const colCHDAE = findCol(['CHDAE', 'Extensão']);
+
+            if (!colDept || !colCHMD) throw new Error("Colunas obrigatórias do arquivo Quantitativo ausentes.");
+
+            data.forEach((row, idx) => {
+                const name = cleanName(row[colDept]);
+                if (!name) return;
+
+                const vals = {
+                    chdeg: parseNum(row[colCHDEG]),
+                    chdpg: parseNum(row[colCHDPG]),
+                    chdaa: parseNum(row[colCHDAA]),
+                    chmd:  parseNum(row[colCHMD]),
+                    chdae: parseNum(row[colCHDAE])
+                };
+
+                const Wi = (vals.chdeg * CONFIG.weights.CHDEG) +
+                           (vals.chdpg * CONFIG.weights.CHDPG) +
+                           (vals.chdaa * CONFIG.weights.CHDAA) +
+                           (vals.chmd  * CONFIG.weights.CHMD)  +
+                           (vals.chdae * CONFIG.weights.CHDAE);
+
+                list.push({
+                    id: idx,
+                    name: name,
+                    resp: row[colResp] || 'N/A',
+                    raw: vals,
+                    Wi: Wi,
+                    originalName: row[colDept]
+                });
+            });
+            return list;
+        }
+
+        function processQualDataMap(data) {
+            const map = {}; 
+            const headers = Object.keys(data[0]);
+            
+            const colDept = headers.find(h => h.toLowerCase().includes('departamento'));
+            const criteriaCols = headers.filter(h => h.toLowerCase().includes('nota') || h.toLowerCase().includes('critério'));
+
+            if (!colDept || criteriaCols.length === 0) throw new Error("Colunas do arquivo Qualitativo não identificadas.");
+
+            data.forEach(row => {
+                const name = cleanName(row[colDept]);
+                if (!name) return;
+
+                let sumRaw = 0, countK = 0;
+                let scores = [];
+
+                criteriaCols.forEach(col => {
+                    const val = parseNum(row[col]);
+                    scores.push(val); 
+                    if (val > 0) { sumRaw += val; countK++; }
+                });
+
+                while(scores.length < 5) scores.push(0);
+
+                const avgRaw = countK > 0 ? (sumRaw / countK) : 0;
+                const QIi = avgRaw / 5.0;
+
+                const entry = { QIi: QIi, avgRaw: avgRaw, scores: scores };
+
+                if (!map[name]) map[name] = [];
+                map[name].push(entry);
+            });
+            return map;
+        }
+
+        function mergeDatasetsFIFO(quantList, qualMap) {
+            const merged = [];
+            let maxWi = 0;
+            quantList.forEach(item => { if (item.Wi > maxWi) maxWi = item.Wi; });
+
+            quantList.forEach(quantItem => {
+                const key = quantItem.name;
+                let qualItem = { QIi: 0, avgRaw: 0, scores: [0,0,0,0,0] };
+
+                if (qualMap[key] && qualMap[key].length > 0) {
+                    qualItem = qualMap[key].shift();
+                }
+
+                const FIi = maxWi > 0 ? (quantItem.Wi / maxWi) : 0;
+                const totalScore = 100 * ((CONFIG.alpha * FIi) + (CONFIG.beta * qualItem.QIi));
+
+                merged.push({
+                    ...quantItem,
+                    FIi: FIi,
+                    QIi: qualItem.QIi,
+                    avgRaw: qualItem.avgRaw,
+                    qualScores: qualItem.scores,
+                    totalScore: totalScore
+                });
+            });
+
+            return merged;
+        }
+
+        function calculateFinalScores(data) {
+            data.sort((a, b) => b.totalScore - a.totalScore);
+            for (let i = 0; i < data.length; i++) {
+                if (i > 0 && Math.abs(data[i].totalScore - data[i-1].totalScore) < 0.0001) {
+                    data[i].rank = data[i-1].rank;
+                } else {
+                    data[i].rank = i + 1;
+                }
+            }
+            return data;
+        }
+
+        function cleanName(str) {
+            return str ? str.trim().toUpperCase().replace(/\s+/g, ' ') : null;
+        }
+        function parseNum(val) {
+            if (!val) return 0;
+            if (typeof val === 'number') return val;
+            let v = val.toString().trim();
+            if (v.includes(',') && v.includes('.')) v = v.replace(/\./g, '').replace(',', '.');
+            else if (v.includes(',')) v = v.replace(',', '.');
+            return parseFloat(v) || 0;
+        }
+
+        function renderTable(data, limit) {
+            const tbody = document.getElementById('rankingBody');
+            tbody.innerHTML = '';
+            
+            const fmt = n => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const fmt0 = n => n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
+            const fmt4 = n => n.toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                // Lógica de destaque baseada no limite escolhido
+                const isTop = row.rank <= limit;
+                const posClass = isTop ? "text-[#004388] font-bold bg-blue-50/50" : "text-slate-600";
+                
+                // Nomes completos (sem truncamento)
+                const resp = row.resp;
+
+                const s = row.qualScores || [0,0,0,0,0];
+
+                tr.innerHTML = `
+                    <td class="px-2 py-2 text-center border-r border-slate-200 sticky left-0 bg-white z-10 ${posClass}">
+                        ${row.rank}º
+                    </td>
+                    <td class="px-2 py-2 border-r border-slate-200 sticky left-10 bg-white z-10 min-w-[250px] whitespace-normal">
+                        <div class="font-bold text-slate-700 leading-tight">${row.originalName}</div>
+                        <div class="text-[10px] text-slate-500 italic mt-1 leading-tight">${resp}</div>
+                    </td>
+                    
+                    <!-- Resultados -->
+                    <td class="px-2 py-2 text-right font-bold text-slate-800 bg-slate-50 border-r border-slate-300">
+                        ${fmt(row.totalScore)}
+                        ${isTop ? '<span class="ml-1 text-[8px] align-top text-[#008237] font-bold">★</span>' : ''}
+                    </td>
+                    <td class="px-2 py-2 text-right font-mono text-slate-500 border-r border-slate-200">${fmt4(row.FIi)}</td>
+                    <td class="px-2 py-2 text-right font-mono text-slate-500 border-r border-slate-200">${fmt4(row.QIi)}</td>
+                    
+                    <!-- Brutos Quantitativos -->
+                    <td class="px-2 py-2 text-right font-mono text-slate-600 bg-slate-50 border-r border-slate-200">${fmt(row.raw.chdeg)}</td>
+                    <td class="px-2 py-2 text-right font-mono text-slate-600 bg-slate-50 border-r border-slate-200">${fmt(row.raw.chdpg)}</td>
+                    <td class="px-2 py-2 text-right font-mono text-slate-600 bg-slate-50 border-r border-slate-200">${fmt(row.raw.chdaa)}</td>
+                    <td class="px-2 py-2 text-right font-mono text-slate-600 bg-slate-50 border-r border-slate-200 font-bold">${fmt(row.raw.chmd)}</td>
+                    <td class="px-2 py-2 text-right font-mono text-slate-600 bg-slate-50 border-r border-slate-200">${fmt(row.raw.chdae)}</td>
+
+                    <!-- Brutos Qualitativos -->
+                    <td class="px-2 py-2 text-center font-mono text-[#008237] bg-green-50 border-r border-green-100">${fmt0(s[0])}</td>
+                    <td class="px-2 py-2 text-center font-mono text-[#008237] bg-green-50 border-r border-green-100">${fmt0(s[1])}</td>
+                    <td class="px-2 py-2 text-center font-mono text-[#008237] bg-green-50 border-r border-green-100">${fmt0(s[2])}</td>
+                    <td class="px-2 py-2 text-center font-mono text-[#008237] bg-green-50 border-r border-green-100">${fmt0(s[3])}</td>
+                    <td class="px-2 py-2 text-center font-mono text-[#008237] bg-green-50">${fmt0(s[4])}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // Forçar re-renderização das fórmulas LaTeX recém inseridas
+            if (window.MathJax) {
+                MathJax.typesetPromise();
+            }
+        }
+
+        let charts = {};
+        function renderCharts(data, limit) {
+            // Exibir no gráfico um pouco além do limite para contexto, mas focando nos classificados
+            const displayCount = Math.max(limit + 5, 10);
+            const topData = data.slice(0, displayCount);
+            const labels = topData.map(d => `${d.rank}º ${d.originalName.substring(0, 15)}...`);
+
+            const ctx1 = document.getElementById('rankingChart').getContext('2d');
+            if (charts.bar) charts.bar.destroy();
+            charts.bar = new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'Quant (0.5×FI)', data: topData.map(d => 100*0.5*d.FIi), backgroundColor: '#004388', stack:'0' },
+                        { label: 'Qual (0.5×QI)', data: topData.map(d => 100*0.5*d.QIi), backgroundColor: '#008237', stack:'0' }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: {position:'bottom'} },
+                    scales: { x: {stacked:true, ticks:{font:{size:9}}}, y: {stacked:true, max:100} }
+                }
+            });
+
+            const ctx2 = document.getElementById('scatterChart').getContext('2d');
+            if (charts.scatter) charts.scatter.destroy();
+            charts.scatter = new Chart(ctx2, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Solicitações',
+                        data: data.map(d => ({ x: d.FIi, y: d.QIi, name: d.originalName, resp: d.resp })),
+                        // Cor baseada no limite dinâmico
+                        backgroundColor: data.map(d => d.rank <= limit ? '#004388':'#94a3b8')
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => `${ctx.raw.name}: (${ctx.raw.x.toFixed(2)}, ${ctx.raw.y.toFixed(2)})`
+                            }
+                        }
+                    },
+                    scales: { x: {title:{display:true, text:'FI'}, min:0, max:1.1}, y: {title:{display:true, text:'QI'}, min:0, max:1.1} }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
