@@ -1,3 +1,27 @@
+<!--
+===============================================================================
+ Projeto: Sistema Integrado de Alocação de Vagas Docentes – UFRRJ
+ Versão: 3.1.0 (Edição Edital CEPE 2025 + Suporte XLSX/Deferimento)
+ Contexto: Ferramenta de Apoio à Decisão para o Conselho de Ensino, Pesquisa e Extensão (CEPE).
+
+ Autor: Prof. Marlucio Barbosa
+ Instituição: Universidade Federal Rural do Rio de Janeiro (UFRRJ) - PROPLADI
+ Copyright (c) 2025, Prof. Marlucio Barbosa e UFRRJ.
+ Licença: Todos os direitos reservados.
+ Aviso: É proibida a reprodução, distribuição ou modificação deste arquivo,
+        no todo ou em parte, sem autorização expressa e por escrito dos
+        detentores dos direitos.
+ Terceiros: Este documento utiliza Tailwind CSS, MathJax, PapaParse, SheetJS
+            e Chart.js, sujeitos às respectivas licenças.
+ 
+ Alterações Recentes (v3.1.0):
+ 1. Implementação de leitura de arquivo XLSX com múltiplas abas.
+ 2. Verificação de homologação (deferimento) via aba 'Resumo'.
+ 3. Tratamento visual e lógico de notas ausentes (imputação de zero).
+ 4. Separação de fluxo de classificação para inscrições indeferidas.
+ 5. Ajustes de identidade visual (Cores UFRRJ) e layout de impressão.
+===============================================================================
+-->
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -12,8 +36,11 @@
     <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     
-    <!-- PapaParse -->
+    <!-- PapaParse (CSV) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    
+    <!-- SheetJS (Excel) -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -26,10 +53,10 @@
         
         /* Cores Institucionais UFRRJ (Manual de Identidade Visual) */
         :root {
-            --ufrrj-blue: #004388;      /* Azul Institucional RGB 0 67 136 */
-            --ufrrj-yellow: #FFCC00;    /* Amarelo Institucional RGB 255 204 0 */
-            --ufrrj-green: #008237;     /* Verde Institucional RGB 0 130 55 */
-            --ufrrj-red: #BC1413;       /* Vermelho (Brasão) */
+            --ufrrj-blue: #004388;      /* Azul Institucional */
+            --ufrrj-yellow: #FFCC00;    /* Amarelo Institucional */
+            --ufrrj-green: #008237;     /* Verde Institucional */
+            --ufrrj-red: #BC1413;       /* Vermelho */
         }
 
         .math-block {
@@ -39,79 +66,56 @@
             margin: 1rem 0;
         }
         
-        /* Scrollbar fina para a tabela */
-        .custom-scrollbar::-webkit-scrollbar {
-            height: 8px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: #f1f1f1;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 4px;
-        }
+        .custom-scrollbar::-webkit-scrollbar { height: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 
-        /* Ajustes para renderização do MathJax */
-        mjx-container {
-            font-size: 110% !important;
-        }
+        mjx-container { font-size: 110% !important; }
         
         /* FORÇAR COR NO MATHJAX DENTRO DE CABEÇALHOS ESCUROS */
         th mjx-container, th .mjx-chtml, th svg, th .MathJax {
             color: inherit !important;
             fill: currentColor !important;
-            font-size: 1.1em !important; /* Leve aumento para legibilidade */
+            font-size: 1.1em !important;
+        }
+
+        /* Estilo do Asterisco de Nota Ausente */
+        .missing-grade {
+            color: #d97706; /* Amarelo escuro/Laranja */
+            font-weight: bold;
+            font-size: 1.4em;
+            line-height: 1;
+            vertical-align: middle;
+        }
+
+        /* Estilo para Inscrição Indeferida */
+        .status-rejected {
+            color: var(--ufrrj-red);
+            font-weight: bold;
+            font-size: 0.85em;
+            text-transform: uppercase;
+            background-color: #fee2e2;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 8px;
+            display: inline-block;
+            border: 1px solid var(--ufrrj-red);
         }
 
         /* CONFIGURAÇÕES DE IMPRESSÃO */
         @media print {
-            body { 
-                -webkit-print-color-adjust: exact; 
-                print-color-adjust: exact; 
-                background: white;
-            }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: white; }
             .no-print { display: none !important; }
-            
-            /* Remove posicionamento fixo/sticky na impressão */
-            header.sticky {
-                position: static !important;
-                background-color: var(--ufrrj-blue) !important;
-                color: white !important;
-                border-bottom: 2px solid #FFCC00 !important;
-            }
-            
-            /* Remove sticky das tabelas */
-            th.sticky, td.sticky {
-                position: static !important;
-                overflow: visible !important;
-            }
-            
-            /* Configuração da Página Paisagem */
-            @page { 
-                size: landscape; 
-                margin: 0.5cm; 
-            }
-            
+            header.sticky { position: static !important; border-bottom: 2px solid #FFCC00 !important; }
+            th.sticky, td.sticky { position: static !important; overflow: visible !important; }
+            @page { size: landscape; margin: 0.5cm; }
             main { max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
-            
-            /* Ocultar Gráficos na Impressão (Formalidade) */
-            .chart-container-print {
-                display: none !important;
-            }
-            
-            /* Ajuste de Tabela */
+            .chart-container-print { display: none !important; }
             table { font-size: 7pt !important; width: 100% !important; }
             th, td { padding: 2px 4px !important; border: 1px solid #ccc !important; }
-            
-            thead th {
-                background-color: #f0f0f0 !important;
-                color: #000 !important;
-            }
-            
-            /* Garantir que as cores de fundo (como o verde/azul institucional) saiam na impressão */
+            thead th { background-color: #f0f0f0 !important; color: #000 !important; }
             .bg-\[\#004388\] { background-color: #004388 !important; color: white !important; }
             .bg-\[\#008237\] { background-color: #008237 !important; color: white !important; }
-            .text-\[\#FFCC00\] { color: #FFCC00 !important; }
         }
     </style>
 </head>
@@ -122,13 +126,13 @@
         <div class="container mx-auto px-6 py-4 flex justify-between items-center">
             <div>
                 <h1 class="text-xl md:text-2xl font-bold tracking-tight font-serif leading-tight">
-                    PROLADI/UFRRJ
+                    UFRRJ - PROPLADI
                 </h1>
                 <p class="text-sm text-yellow-200 mt-1">Sistema de Apoio ao CEPE - Alocação de Vagas</p>
             </div>
             <div class="text-right hidden md:block pl-4">
-                <p class="text-xs font-mono">v2.7.0 - Edital CEPE 2025</p>
-                <p class="text-xs text-blue-100">Padrão Visual: Manual UFRRJ v1.2</p>
+                <p class="text-xs font-mono">v3.1.0 - Edital CEPE 2025</p>
+                <p class="text-xs text-blue-100">Prof. Marlucio Barbosa</p>
             </div>
         </div>
     </header>
@@ -158,39 +162,70 @@
                     <input type="number" id="vacancyCount" value="5" min="1" max="100" class="w-24 px-3 py-2 border border-slate-300 rounded-md focus:ring-[#004388] focus:border-[#004388] font-bold text-lg text-center text-[#004388] shadow-sm">
                 </div>
             </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Upload Quantitativo -->
-                <div>
-                    <h3 class="font-semibold text-[#004388] mb-2">1. Arquivo Quantitativo (CSV)</h3>
-                    <p class="text-xs text-slate-500 mb-2">Solicitações de Vagas (CHMD, Graduação, etc.)</p>
-                    <label class="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-lg cursor-pointer bg-slate-50 hover:bg-blue-50 transition-all" id="drop-quant">
-                        <div class="flex flex-col items-center justify-center pt-5 pb-6">
-                            <svg class="w-8 h-8 mb-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                            <p class="text-xs text-slate-500"><span class="font-bold">Clique</span> para carregar</p>
-                        </div>
-                        <input id="inputQuant" type="file" accept=".csv" class="hidden" />
-                    </label>
-                    <div id="statusQuant" class="mt-2 text-xs font-semibold text-slate-400">Aguardando arquivo...</div>
-                </div>
 
-                <!-- Upload Qualitativo -->
-                <div>
-                    <h3 class="font-semibold text-[#004388] mb-2">2. Arquivo Qualitativo (CSV)</h3>
-                    <p class="text-xs text-slate-500 mb-2">Avaliações das Solicitações (Critérios 1 a 5)</p>
-                    <label class="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-lg cursor-pointer bg-slate-50 hover:bg-green-50 transition-all" id="drop-qual">
+            <!-- Tabs de Seleção de Entrada -->
+            <div class="mb-4 border-b border-gray-200">
+                <ul class="flex flex-wrap -mb-px text-sm font-medium text-center" id="inputTabs">
+                    <li class="mr-2">
+                        <button class="inline-block p-4 text-[#004388] border-b-2 border-[#004388] rounded-t-lg active group" id="tab-xlsx-btn" onclick="switchTab('xlsx')">
+                            <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            Arquivo Único (Excel .xlsx)
+                        </button>
+                    </li>
+                    <li class="mr-2">
+                        <button class="inline-block p-4 text-gray-500 border-b-2 border-transparent rounded-t-lg hover:text-gray-600 hover:border-gray-300 group" id="tab-csv-btn" onclick="switchTab('csv')">
+                            <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"></path></svg>
+                            Arquivos Separados (.csv)
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            
+            <!-- Conteúdo: Excel -->
+            <div id="tab-xlsx-content" class="block">
+                <div class="bg-green-50 p-6 rounded-lg border border-green-200">
+                    <h3 class="font-semibold text-[#008237] mb-2">Importar Planilha Unificada (.xlsx)</h3>
+                    <p class="text-xs text-slate-600 mb-4">O arquivo deve conter as abas <strong>"Quantitativa"</strong> e <strong>"Qualitativa"</strong>. Se houver a aba <strong>"Resumo"</strong>, o sistema verificará a coluna de Deferimento.</p>
+                    
+                    <label class="flex flex-col items-center justify-center w-full h-32 border-2 border-[#008237] border-dashed rounded-lg cursor-pointer bg-white hover:bg-green-100 transition-all" id="drop-xlsx">
                         <div class="flex flex-col items-center justify-center pt-5 pb-6">
-                            <svg class="w-8 h-8 mb-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
-                            <p class="text-xs text-slate-500"><span class="font-bold">Clique</span> para carregar</p>
+                            <svg class="w-10 h-10 mb-3 text-[#008237]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                            <p class="text-sm text-slate-500"><span class="font-bold">Clique</span> para carregar o arquivo Excel</p>
                         </div>
-                        <input id="inputQual" type="file" accept=".csv" class="hidden" />
+                        <input id="inputXlsx" type="file" accept=".xlsx, .xls" class="hidden" />
                     </label>
-                    <div id="statusQual" class="mt-2 text-xs font-semibold text-slate-400">Aguardando arquivo...</div>
+                    <div id="statusXlsx" class="mt-2 text-xs font-semibold text-slate-400 text-center">Aguardando arquivo...</div>
+                </div>
+            </div>
+
+            <!-- Conteúdo: CSV (Legacy) -->
+            <div id="tab-csv-content" class="hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <h3 class="font-semibold text-[#004388] mb-2">1. Arquivo Quantitativo (.csv)</h3>
+                        <label class="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-lg cursor-pointer bg-slate-50 hover:bg-blue-50 transition-all" id="drop-quant">
+                            <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                                <span class="font-bold text-slate-400">Carregar CSV Quantitativo</span>
+                            </div>
+                            <input id="inputQuant" type="file" accept=".csv" class="hidden" />
+                        </label>
+                        <div id="statusQuant" class="mt-2 text-xs font-semibold text-slate-400">Aguardando...</div>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-[#004388] mb-2">2. Arquivo Qualitativo (.csv)</h3>
+                        <label class="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-lg cursor-pointer bg-slate-50 hover:bg-green-50 transition-all" id="drop-qual">
+                            <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                                <span class="font-bold text-slate-400">Carregar CSV Qualitativo</span>
+                            </div>
+                            <input id="inputQual" type="file" accept=".csv" class="hidden" />
+                        </label>
+                        <div id="statusQual" class="mt-2 text-xs font-semibold text-slate-400">Aguardando...</div>
+                    </div>
                 </div>
             </div>
 
             <div id="processBtnArea" class="mt-6 text-center hidden">
-                <button onclick="processAllData()" class="bg-[#004388] hover:bg-[#003366] text-white font-bold py-3 px-8 rounded shadow-lg transform transition hover:scale-105 flex items-center mx-auto border-b-4 border-[#FFCC00]">
+                <button onclick="processData()" class="bg-[#004388] hover:bg-[#003366] text-white font-bold py-3 px-8 rounded shadow-lg transform transition hover:scale-105 flex items-center mx-auto border-b-4 border-[#FFCC00]">
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
                     Calcular Classificação Final
                 </button>
@@ -205,10 +240,9 @@
                 <span class="bg-slate-100 text-slate-800 text-sm font-semibold mr-2 px-2.5 py-0.5 rounded">Etapa 2</span>
                 Metodologia do CEPE
             </h2>
-            
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div class="bg-slate-50 p-4 rounded border border-slate-100">
-                    <h3 class="font-bold text-[#004388] mb-2 text-sm uppercase">Quantitativo ($FI_i$)</h3>
+                    <h3 class="font-bold text-[#004388] mb-2 text-sm uppercase">Quantitativo \( (FI_i) \)</h3>
                     <div class="text-xs font-mono bg-white p-2 border rounded text-slate-700">
                         $$ W_i = 0,25 \cdot CHDEG + 0,15 \cdot CHDPG $$
                         $$ + 0,10 \cdot CHDAA + 0,25 \cdot CHMD $$
@@ -217,9 +251,10 @@
                     </div>
                 </div>
                 <div class="bg-slate-50 p-4 rounded border border-slate-100">
-                    <h3 class="font-bold text-[#008237] mb-2 text-sm uppercase">Qualitativo ($QI_i$)</h3>
+                    <h3 class="font-bold text-[#008237] mb-2 text-sm uppercase">Qualitativo \( (QI_i) \)</h3>
                     <div class="text-xs font-mono bg-white p-2 border rounded text-slate-700">
-                        $$ \bar{S}_i = \frac{1}{K}\sum_{k=1}^K s_{ik}, \quad s_{ik} \in [1,5] $$
+                        $$ \text{Nota Ausente} \rightarrow 0 $$
+                        $$ \bar{S}_i = \frac{1}{K}\sum_{k=1}^K s_{ik}, \quad s_{ik} \in [0,5] $$
                         $$ QI_i = \frac{\bar{S}_i}{5} $$
                     </div>
                 </div>
@@ -235,21 +270,14 @@
 
         <!-- Resultados -->
         <div id="resultsSection" class="hidden space-y-8">
-            
-            <!-- Diagnóstico Visual (Com ajuste para impressão) -->
             <div class="chart-container-print bg-white rounded-lg shadow-md p-6 border border-slate-200">
                 <h2 class="text-xl font-bold mb-4 text-[#004388] border-b pb-2">Diagnóstico Visual</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 h-80">
-                    <div class="relative w-full h-full">
-                         <canvas id="rankingChart"></canvas>
-                    </div>
-                    <div class="relative w-full h-full">
-                        <canvas id="scatterChart"></canvas>
-                   </div>
+                    <div class="relative w-full h-full"><canvas id="rankingChart"></canvas></div>
+                    <div class="relative w-full h-full"><canvas id="scatterChart"></canvas></div>
                 </div>
             </div>
 
-            <!-- Tabela -->
             <div class="bg-white rounded-lg shadow-md p-6 border border-slate-200">
                 <div class="flex justify-between items-end mb-4 border-b pb-2 no-print">
                     <h2 class="text-2xl font-bold text-[#004388]">Classificação Final CEPE - Relatório Analítico</h2>
@@ -263,37 +291,21 @@
                     <table class="w-full text-xs text-left text-slate-600 border-collapse whitespace-nowrap">
                         <thead class="text-[10px] text-white uppercase bg-[#004388] leading-tight">
                             <tr>
-                                <!-- Cabeçalhos Principais -->
                                 <th rowspan="2" class="px-2 py-2 text-center border border-[#003B75] w-10 sticky left-0 bg-[#004388] z-10">Pos</th>
                                 <th rowspan="2" class="px-2 py-2 border border-[#003B75] sticky left-10 bg-[#004388] z-10 min-w-[250px]">Departamento / Resp.</th>
-                                
                                 <th colspan="3" class="px-2 py-1 text-center border border-[#003B75] bg-[#003B75]">Resultados Finais</th>
-                                
                                 <th colspan="5" class="px-2 py-1 text-center border border-[#003B75] bg-slate-600">Variáveis Quantitativas (Brutas)</th>
-                                
                                 <th colspan="5" class="px-2 py-1 text-center border border-[#003B75] bg-[#008237]">Critérios Qualitativos (1-5)</th>
                             </tr>
                             <tr>
-                                <!-- Sub-cabeçalhos Resultados -->
-                                <!-- Ajuste: Cor herdada explicitamente para o MathJax -->
-                                <th class="px-2 py-2 text-right border border-[#003B75] bg-[#003B75] text-[#FFCC00] font-bold" title="Fração Ideal Total">
-                                    \( \mathbf{FI^{\text{total}}} \)
-                                </th>
-                                <th class="px-2 py-2 text-right border border-[#003B75] bg-[#003B75]/80" title="Índice Quantitativo Normalizado">
-                                    \( FI_i \)
-                                </th>
-                                <th class="px-2 py-2 text-right border border-[#003B75] bg-[#003B75]/80" title="Índice Qualitativo Normalizado">
-                                    \( QI_i \)
-                                </th>
-                                
-                                <!-- Sub-cabeçalhos Quantitativos -->
-                                <th class="px-2 py-2 text-right border border-gray-500 bg-slate-200 text-slate-800 font-mono" title="Graduação">CHDEG</th>
-                                <th class="px-2 py-2 text-right border border-gray-500 bg-slate-200 text-slate-800 font-mono" title="Pós-Graduação">CHDPG</th>
-                                <th class="px-2 py-2 text-right border border-gray-500 bg-slate-200 text-slate-800 font-mono" title="Atividades Acadêmicas">CHDAA</th>
-                                <th class="px-2 py-2 text-right border border-gray-500 bg-slate-200 text-slate-800 font-mono" title="Média Didática">CHMD</th>
-                                <th class="px-2 py-2 text-right border border-gray-500 bg-slate-200 text-slate-800 font-mono" title="Extensão">CHDAE</th>
-                                
-                                <!-- Sub-cabeçalhos Qualitativos -->
+                                <th class="px-2 py-2 text-right border border-[#003B75] bg-[#003B75] text-[#FFCC00] font-bold" title="Fração Ideal Total">\( \mathbf{FI^{\text{total}}} \)</th>
+                                <th class="px-2 py-2 text-right border border-[#003B75] bg-[#003B75]/80">\( FI_i \)</th>
+                                <th class="px-2 py-2 text-right border border-[#003B75] bg-[#003B75]/80">\( QI_i \)</th>
+                                <th class="px-2 py-2 text-right border border-gray-500 bg-slate-200 text-slate-800 font-mono">CHDEG</th>
+                                <th class="px-2 py-2 text-right border border-gray-500 bg-slate-200 text-slate-800 font-mono">CHDPG</th>
+                                <th class="px-2 py-2 text-right border border-gray-500 bg-slate-200 text-slate-800 font-mono">CHDAA</th>
+                                <th class="px-2 py-2 text-right border border-gray-500 bg-slate-200 text-slate-800 font-mono">CHMD</th>
+                                <th class="px-2 py-2 text-right border border-gray-500 bg-slate-200 text-slate-800 font-mono">CHDAE</th>
                                 <th class="px-2 py-2 text-center border border-[#008237] bg-green-50 text-[#008237] font-mono">C1</th>
                                 <th class="px-2 py-2 text-center border border-[#008237] bg-green-50 text-[#008237] font-mono">C2</th>
                                 <th class="px-2 py-2 text-center border border-[#008237] bg-green-50 text-[#008237] font-mono">C3</th>
@@ -305,7 +317,7 @@
                     </table>
                 </div>
                 <div class="mt-2 text-[10px] text-slate-500 italic">
-                    Legenda: <strong>C1..C5</strong>: Critérios de avaliação qualitativa (Escala 1 a 5). <strong>CH...</strong>: Cargas Horárias brutas (não normalizadas).
+                    Legenda: <span class="text-[#d97706] font-bold text-sm">*</span> Nota não atribuída (valor assumido = 0). <strong>C1..C5</strong>: Critérios de avaliação qualitativa (Escala 1 a 5). <strong>CH...</strong>: Cargas Horárias brutas (não normalizadas).
                 </div>
             </div>
         </div>
@@ -319,57 +331,130 @@
     </footer>
 
     <script>
-        // --- Configuração e Estado ---
-        const state = { quantFile: null, qualFile: null };
+        // --- Estado e Configuração ---
+        const state = { 
+            mode: 'xlsx', // 'xlsx' ou 'csv'
+            quantFile: null, 
+            qualFile: null,
+            xlsxFile: null 
+        };
+        
         const CONFIG = {
             alpha: 0.50, beta: 0.50,
             weights: { CHDEG: 0.25, CHDPG: 0.15, CHDAA: 0.10, CHMD: 0.25, CHDAE: 0.25 }
         };
 
-        // --- Upload Logic ---
+        // --- Gerenciamento de Tabs ---
+        function switchTab(mode) {
+            state.mode = mode;
+            const btnXlsx = document.getElementById('tab-xlsx-btn');
+            const btnCsv = document.getElementById('tab-csv-btn');
+            const contentXlsx = document.getElementById('tab-xlsx-content');
+            const contentCsv = document.getElementById('tab-csv-content');
+            
+            if (mode === 'xlsx') {
+                btnXlsx.className = "inline-block p-4 text-[#004388] border-b-2 border-[#004388] rounded-t-lg active group";
+                btnCsv.className = "inline-block p-4 text-gray-500 border-b-2 border-transparent rounded-t-lg hover:text-gray-600 hover:border-gray-300 group";
+                contentXlsx.classList.remove('hidden');
+                contentCsv.classList.add('hidden');
+            } else {
+                btnXlsx.className = "inline-block p-4 text-gray-500 border-b-2 border-transparent rounded-t-lg hover:text-gray-600 hover:border-gray-300 group";
+                btnCsv.className = "inline-block p-4 text-[#004388] border-b-2 border-[#004388] rounded-t-lg active group";
+                contentXlsx.classList.add('hidden');
+                contentCsv.classList.remove('hidden');
+            }
+            checkReady();
+        }
+
+        // --- Listeners de Upload ---
         setupUpload('inputQuant', 'statusQuant', 'quantFile', 'drop-quant');
         setupUpload('inputQual', 'statusQual', 'qualFile', 'drop-qual');
+        
+        // Listener Específico para XLSX
+        const inputXlsx = document.getElementById('inputXlsx');
+        const dropXlsx = document.getElementById('drop-xlsx');
+        inputXlsx.addEventListener('change', (e) => handleXlsxFile(e.target.files[0]));
+        dropXlsx.addEventListener('dragover', (e) => { e.preventDefault(); dropXlsx.classList.add('bg-green-100'); });
+        dropXlsx.addEventListener('dragleave', (e) => { e.preventDefault(); dropXlsx.classList.remove('bg-green-100'); });
+        dropXlsx.addEventListener('drop', (e) => {
+            e.preventDefault(); dropXlsx.classList.remove('bg-green-100');
+            handleXlsxFile(e.dataTransfer.files[0]);
+        });
 
         function setupUpload(inputId, statusId, stateKey, dropId) {
             const input = document.getElementById(inputId);
             const status = document.getElementById(statusId);
             const drop = document.getElementById(dropId);
 
-            input.addEventListener('change', (e) => handleFile(e.target.files[0]));
+            input.addEventListener('change', (e) => handleCsvFile(e.target.files[0], stateKey, status, drop));
             drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('bg-blue-100'); });
             drop.addEventListener('dragleave', (e) => { e.preventDefault(); drop.classList.remove('bg-blue-100'); });
             drop.addEventListener('drop', (e) => {
                 e.preventDefault(); drop.classList.remove('bg-blue-100');
-                handleFile(e.dataTransfer.files[0]);
+                handleCsvFile(e.dataTransfer.files[0], stateKey, status, drop);
             });
+        }
 
-            function handleFile(file) {
-                if (!file) return;
-                state[stateKey] = file;
-                status.textContent = `Carregado: ${file.name}`;
-                status.classList.remove('text-slate-400');
-                status.classList.add('text-[#008237]');
-                drop.classList.add('border-[#008237]', 'bg-green-50');
-                if (state.quantFile && state.qualFile) document.getElementById('processBtnArea').classList.remove('hidden');
+        function handleCsvFile(file, stateKey, statusEl, dropEl) {
+            if (!file) return;
+            state[stateKey] = file;
+            statusEl.textContent = `Carregado: ${file.name}`;
+            statusEl.classList.remove('text-slate-400');
+            statusEl.classList.add('text-[#008237]');
+            dropEl.classList.add('border-[#008237]', 'bg-green-50');
+            checkReady();
+        }
+
+        function handleXlsxFile(file) {
+            if (!file) return;
+            state.xlsxFile = file;
+            const status = document.getElementById('statusXlsx');
+            const drop = document.getElementById('drop-xlsx');
+            status.textContent = `Carregado: ${file.name}`;
+            status.classList.remove('text-slate-400');
+            status.classList.add('text-[#008237]');
+            drop.classList.add('border-[#008237]', 'bg-green-50');
+            checkReady();
+        }
+
+        function checkReady() {
+            const btn = document.getElementById('processBtnArea');
+            if (state.mode === 'xlsx' && state.xlsxFile) {
+                btn.classList.remove('hidden');
+            } else if (state.mode === 'csv' && state.quantFile && state.qualFile) {
+                btn.classList.remove('hidden');
+            } else {
+                btn.classList.add('hidden');
             }
         }
 
-        // --- Core Processing ---
-        async function processAllData() {
+        // --- Processamento Principal ---
+        async function processData() {
             try {
                 document.getElementById('errorArea').classList.add('hidden');
                 
-                // Ler quantidade de vagas a classificar
+                let rawQuant, rawQual;
+                let deferralMap = null; // Mapa para controle de deferimento (exclusivo XLSX)
+
+                if (state.mode === 'xlsx') {
+                    // Leitura do Excel
+                    const data = await readExcel(state.xlsxFile);
+                    rawQuant = data.quant;
+                    rawQual = data.qual;
+                    deferralMap = data.deferralMap; // Pode ser null se não houver planilha Resumo
+                } else {
+                    // Leitura dos CSVs
+                    rawQuant = await parseCSV(state.quantFile);
+                    rawQual = await parseCSV(state.qualFile);
+                }
+
                 const vacancyInput = document.getElementById('vacancyCount').value;
                 const limit = parseInt(vacancyInput) || 5;
-
-                const rawQuant = await parseCSV(state.quantFile);
-                const rawQual = await parseCSV(state.qualFile);
 
                 const quantList = processQuantDataList(rawQuant);
                 const qualMap = processQualDataMap(rawQual);
 
-                const mergedData = mergeDatasetsFIFO(quantList, qualMap);
+                const mergedData = mergeDatasetsFIFO(quantList, qualMap, deferralMap);
                 const finalRanking = calculateFinalScores(mergedData);
 
                 renderTable(finalRanking, limit);
@@ -386,6 +471,58 @@
             }
         }
 
+        // --- Leitor de Excel (SheetJS) ---
+        function readExcel(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, {type: 'array'});
+
+                        // Validação das Abas obrigatórias
+                        if (!workbook.Sheets['Quantitativa'] || !workbook.Sheets['Qualitativa']) {
+                            throw new Error("O arquivo Excel deve conter as abas 'Quantitativa' e 'Qualitativa'.");
+                        }
+
+                        // Leitura de Dados Quantitativos e Qualitativos
+                        const quantData = XLSX.utils.sheet_to_json(workbook.Sheets['Quantitativa'], {range: 1});
+                        const qualData = XLSX.utils.sheet_to_json(workbook.Sheets['Qualitativa'], {range: 1});
+
+                        // Leitura da Aba Resumo (Opcional para Deferimento)
+                        let deferralMap = null;
+                        if (workbook.Sheets['Resumo']) {
+                            deferralMap = {};
+                            const resumoData = XLSX.utils.sheet_to_json(workbook.Sheets['Resumo'], {range: 1});
+                            
+                            // Mapeia Departamento -> Status de Deferimento
+                            resumoData.forEach(row => {
+                                // Busca coluna 'Nome do Departamento solicitante'
+                                const nameCol = Object.keys(row).find(k => k.toLowerCase().includes('departamento'));
+                                // Busca coluna 'Deferido'
+                                const statusCol = Object.keys(row).find(k => k.toLowerCase().includes('deferido'));
+                                
+                                if (nameCol && statusCol) {
+                                    const deptName = cleanName(row[nameCol]);
+                                    const statusVal = String(row[statusCol]).trim().toLowerCase();
+                                    // Considera deferido se for 'true', 'verdadeiro' ou 'sim'
+                                    const isDeferred = (statusVal === 'true' || statusVal === 'verdadeiro' || statusVal === 'sim');
+                                    deferralMap[deptName] = isDeferred;
+                                }
+                            });
+                        }
+
+                        resolve({ quant: quantData, qual: qualData, deferralMap: deferralMap });
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+                reader.onerror = (err) => reject(err);
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        // --- Leitor de CSV ---
         function parseCSV(file) {
             return new Promise((resolve, reject) => {
                 Papa.parse(file, {
@@ -396,20 +533,26 @@
             });
         }
 
+        // --- Normalização de Dados ---
+        
+        function findCol(headers, keys) {
+            return headers.find(h => keys.some(k => h.trim().toLowerCase().includes(k.toLowerCase())));
+        }
+
         function processQuantDataList(data) {
+            if (!data || data.length === 0) throw new Error("Dados Quantitativos vazios.");
             const list = [];
             const headers = Object.keys(data[0]);
-            const findCol = (keys) => headers.find(h => keys.some(k => h.toLowerCase().includes(k.toLowerCase())));
             
-            const colDept = findCol(['Departamento']);
-            const colResp = findCol(['Responsável', 'Preenchimento']);
-            const colCHMD = findCol(['CHMD', 'Média']);
-            const colCHDEG = findCol(['CHDEG', 'Graduação']);
-            const colCHDPG = findCol(['CHDPG', 'Pós']);
-            const colCHDAA = findCol(['CHDAA', 'Atividades']);
-            const colCHDAE = findCol(['CHDAE', 'Extensão']);
+            const colDept = findCol(headers, ['Departamento']);
+            const colResp = findCol(headers, ['Responsável', 'Preenchimento']);
+            const colCHMD = findCol(headers, ['CHMD', 'Média']);
+            const colCHDEG = findCol(headers, ['CHDEG', 'Graduação']);
+            const colCHDPG = findCol(headers, ['CHDPG', 'Pós']);
+            const colCHDAA = findCol(headers, ['CHDAA', 'Atividades']);
+            const colCHDAE = findCol(headers, ['CHDAE', 'Extensão']);
 
-            if (!colDept || !colCHMD) throw new Error("Colunas obrigatórias do arquivo Quantitativo ausentes.");
+            if (!colDept || !colCHMD) throw new Error("Colunas obrigatórias (Departamento, CHMD) não encontradas na aba Quantitativa.");
 
             data.forEach((row, idx) => {
                 const name = cleanName(row[colDept]);
@@ -442,13 +585,14 @@
         }
 
         function processQualDataMap(data) {
+            if (!data || data.length === 0) throw new Error("Dados Qualitativos vazios.");
             const map = {}; 
             const headers = Object.keys(data[0]);
             
             const colDept = headers.find(h => h.toLowerCase().includes('departamento'));
             const criteriaCols = headers.filter(h => h.toLowerCase().includes('nota') || h.toLowerCase().includes('critério'));
 
-            if (!colDept || criteriaCols.length === 0) throw new Error("Colunas do arquivo Qualitativo não identificadas.");
+            if (!colDept || criteriaCols.length === 0) throw new Error("Colunas (Departamento ou Critérios) não encontradas na aba Qualitativa.");
 
             data.forEach(row => {
                 const name = cleanName(row[colDept]);
@@ -456,19 +600,30 @@
 
                 let sumRaw = 0, countK = 0;
                 let scores = [];
+                let missingFlags = [];
 
                 criteriaCols.forEach(col => {
-                    const val = parseNum(row[col]);
-                    scores.push(val); 
-                    if (val > 0) { sumRaw += val; countK++; }
+                    const rawVal = row[col];
+                    const isEmpty = (rawVal === undefined || rawVal === null || rawVal === '');
+                    
+                    if (isEmpty) {
+                        scores.push(0);
+                        missingFlags.push(true); 
+                    } else {
+                        const val = parseNum(rawVal);
+                        scores.push(val);
+                        missingFlags.push(false);
+                        sumRaw += val;
+                        countK++;
+                    }
                 });
 
-                while(scores.length < 5) scores.push(0);
+                while(scores.length < 5) { scores.push(0); missingFlags.push(true); }
+                
+                const avgRaw = sumRaw / 5.0; 
+                const QIi = avgRaw / 5.0; 
 
-                const avgRaw = countK > 0 ? (sumRaw / countK) : 0;
-                const QIi = avgRaw / 5.0;
-
-                const entry = { QIi: QIi, avgRaw: avgRaw, scores: scores };
+                const entry = { QIi: QIi, avgRaw: avgRaw, scores: scores.slice(0,5), missingFlags: missingFlags.slice(0,5) };
 
                 if (!map[name]) map[name] = [];
                 map[name].push(entry);
@@ -476,14 +631,15 @@
             return map;
         }
 
-        function mergeDatasetsFIFO(quantList, qualMap) {
+        // --- Merge FIFO com Verificação de Deferimento ---
+        function mergeDatasetsFIFO(quantList, qualMap, deferralMap) {
             const merged = [];
             let maxWi = 0;
             quantList.forEach(item => { if (item.Wi > maxWi) maxWi = item.Wi; });
 
             quantList.forEach(quantItem => {
                 const key = quantItem.name;
-                let qualItem = { QIi: 0, avgRaw: 0, scores: [0,0,0,0,0] };
+                let qualItem = { QIi: 0, avgRaw: 0, scores: [0,0,0,0,0], missingFlags: [true,true,true,true,true] };
 
                 if (qualMap[key] && qualMap[key].length > 0) {
                     qualItem = qualMap[key].shift();
@@ -492,36 +648,71 @@
                 const FIi = maxWi > 0 ? (quantItem.Wi / maxWi) : 0;
                 const totalScore = 100 * ((CONFIG.alpha * FIi) + (CONFIG.beta * qualItem.QIi));
 
+                // Verifica deferimento se o mapa existir (apenas para XLSX com aba Resumo)
+                // Se o mapa não existir (CSV ou XLSX sem Resumo), assume-se deferido (true)
+                let isDeferred = true;
+                if (deferralMap) {
+                    // Se o departamento está no mapa, usa o status. Se não está, assume algo?
+                    // Pela lógica, se há resumo, deve estar lá. Se não estiver, algo está estranho, 
+                    // mas podemos assumir true para não prejudicar por erro de digitação, ou false por rigor.
+                    // Assumiremos o valor do mapa se a chave existir.
+                    if (deferralMap.hasOwnProperty(key)) {
+                        isDeferred = deferralMap[key];
+                    } else {
+                        // Se não encontrou a chave exata, tenta encontrar parcial ou assume true?
+                        // Vamos assumir true por padrão para evitar falsos negativos por espaços/acentos não tratados
+                        isDeferred = true; 
+                    }
+                }
+
                 merged.push({
                     ...quantItem,
                     FIi: FIi,
                     QIi: qualItem.QIi,
                     avgRaw: qualItem.avgRaw,
                     qualScores: qualItem.scores,
-                    totalScore: totalScore
+                    qualMissing: qualItem.missingFlags,
+                    totalScore: totalScore,
+                    isDeferred: isDeferred // Propriedade de controle
                 });
             });
 
             return merged;
         }
 
+        // --- Cálculo e Ordenação Híbrida ---
         function calculateFinalScores(data) {
-            data.sort((a, b) => b.totalScore - a.totalScore);
-            for (let i = 0; i < data.length; i++) {
-                if (i > 0 && Math.abs(data[i].totalScore - data[i-1].totalScore) < 0.0001) {
-                    data[i].rank = data[i-1].rank;
+            // Separa deferidos de indeferidos
+            const deferredList = data.filter(d => d.isDeferred !== false);
+            const rejectedList = data.filter(d => d.isDeferred === false);
+
+            // 1. Classifica os Deferidos (Pela Nota)
+            deferredList.sort((a, b) => b.totalScore - a.totalScore);
+            
+            // Atribui Rank apenas para os deferidos
+            for (let i = 0; i < deferredList.length; i++) {
+                if (i > 0 && Math.abs(deferredList[i].totalScore - deferredList[i-1].totalScore) < 0.0001) {
+                    deferredList[i].rank = deferredList[i-1].rank;
                 } else {
-                    data[i].rank = i + 1;
+                    deferredList[i].rank = i + 1;
                 }
             }
-            return data;
+
+            // 2. Classifica os Indeferidos (Ordem Alfabética)
+            rejectedList.sort((a, b) => a.originalName.localeCompare(b.originalName));
+            // Marca rank como null ou especial
+            rejectedList.forEach(item => item.rank = null);
+
+            // Retorna lista concatenada: Deferidos + Indeferidos no final
+            return [...deferredList, ...rejectedList];
         }
 
+        // --- Helpers ---
         function cleanName(str) {
-            return str ? str.trim().toUpperCase().replace(/\s+/g, ' ') : null;
+            return str ? String(str).trim().toUpperCase().replace(/\s+/g, ' ') : null;
         }
         function parseNum(val) {
-            if (!val) return 0;
+            if (val === undefined || val === null || val === '') return 0;
             if (typeof val === 'number') return val;
             let v = val.toString().trim();
             if (v.includes(',') && v.includes('.')) v = v.replace(/\./g, '').replace(',', '.');
@@ -529,6 +720,7 @@
             return parseFloat(v) || 0;
         }
 
+        // --- Renderização ---
         function renderTable(data, limit) {
             const tbody = document.getElementById('rankingBody');
             tbody.innerHTML = '';
@@ -539,60 +731,76 @@
 
             data.forEach(row => {
                 const tr = document.createElement('tr');
-                // Lógica de destaque baseada no limite escolhido
-                const isTop = row.rank <= limit;
-                const posClass = isTop ? "text-[#004388] font-bold bg-blue-50/50" : "text-slate-600";
                 
-                // Nomes completos (sem truncamento)
-                const resp = row.resp;
+                // Lógica de Indeferimento
+                const isRejected = (row.isDeferred === false);
+                
+                let rankDisplay, posClass, rowClass;
+                let statusLabel = "";
 
-                const s = row.qualScores || [0,0,0,0,0];
+                if (isRejected) {
+                    rankDisplay = "-";
+                    posClass = "text-gray-400 bg-gray-50";
+                    rowClass = "bg-red-50"; // Fundo levemente vermelho para a linha inteira? Ou apenas nome?
+                    // Vamos manter o padrão visual limpo, talvez só o label
+                    statusLabel = `<span class="status-rejected">INSCRIÇÃO INDEFERIDA</span>`;
+                } else {
+                    rankDisplay = row.rank + "º";
+                    const isTop = row.rank <= limit;
+                    posClass = isTop ? "text-[#004388] font-bold bg-blue-50/50" : "text-slate-600";
+                }
+                
+                let respShort = row.resp; 
+                const s = row.qualScores;
+                const flags = row.qualMissing;
+                
+                const qualCells = s.map((val, i) => {
+                    const content = flags[i] 
+                        ? `<span class="missing-grade" title="Nota não atribuída (Assumido 0)">*</span>` 
+                        : fmt0(val);
+                    return `<td class="px-2 py-2 text-center font-mono text-[#008237] bg-green-50 border-r border-green-100">${content}</td>`;
+                }).join('');
 
                 tr.innerHTML = `
                     <td class="px-2 py-2 text-center border-r border-slate-200 sticky left-0 bg-white z-10 ${posClass}">
-                        ${row.rank}º
+                        ${rankDisplay}
                     </td>
                     <td class="px-2 py-2 border-r border-slate-200 sticky left-10 bg-white z-10 min-w-[250px] whitespace-normal">
-                        <div class="font-bold text-slate-700 leading-tight">${row.originalName}</div>
-                        <div class="text-[10px] text-slate-500 italic mt-1 leading-tight">${resp}</div>
+                        <div class="font-bold text-slate-700 leading-tight">
+                            ${row.originalName}
+                            ${statusLabel}
+                        </div>
+                        <div class="text-[10px] text-slate-500 italic mt-1 leading-tight">${respShort}</div>
                     </td>
                     
-                    <!-- Resultados -->
                     <td class="px-2 py-2 text-right font-bold text-slate-800 bg-slate-50 border-r border-slate-300">
                         ${fmt(row.totalScore)}
-                        ${isTop ? '<span class="ml-1 text-[8px] align-top text-[#008237] font-bold">★</span>' : ''}
+                        ${(!isRejected && row.rank <= limit) ? '<span class="ml-1 text-[8px] align-top text-[#008237] font-bold">★</span>' : ''}
                     </td>
                     <td class="px-2 py-2 text-right font-mono text-slate-500 border-r border-slate-200">${fmt4(row.FIi)}</td>
                     <td class="px-2 py-2 text-right font-mono text-slate-500 border-r border-slate-200">${fmt4(row.QIi)}</td>
                     
-                    <!-- Brutos Quantitativos -->
                     <td class="px-2 py-2 text-right font-mono text-slate-600 bg-slate-50 border-r border-slate-200">${fmt(row.raw.chdeg)}</td>
                     <td class="px-2 py-2 text-right font-mono text-slate-600 bg-slate-50 border-r border-slate-200">${fmt(row.raw.chdpg)}</td>
                     <td class="px-2 py-2 text-right font-mono text-slate-600 bg-slate-50 border-r border-slate-200">${fmt(row.raw.chdaa)}</td>
                     <td class="px-2 py-2 text-right font-mono text-slate-600 bg-slate-50 border-r border-slate-200 font-bold">${fmt(row.raw.chmd)}</td>
                     <td class="px-2 py-2 text-right font-mono text-slate-600 bg-slate-50 border-r border-slate-200">${fmt(row.raw.chdae)}</td>
 
-                    <!-- Brutos Qualitativos -->
-                    <td class="px-2 py-2 text-center font-mono text-[#008237] bg-green-50 border-r border-green-100">${fmt0(s[0])}</td>
-                    <td class="px-2 py-2 text-center font-mono text-[#008237] bg-green-50 border-r border-green-100">${fmt0(s[1])}</td>
-                    <td class="px-2 py-2 text-center font-mono text-[#008237] bg-green-50 border-r border-green-100">${fmt0(s[2])}</td>
-                    <td class="px-2 py-2 text-center font-mono text-[#008237] bg-green-50 border-r border-green-100">${fmt0(s[3])}</td>
-                    <td class="px-2 py-2 text-center font-mono text-[#008237] bg-green-50">${fmt0(s[4])}</td>
+                    ${qualCells}
                 `;
                 tbody.appendChild(tr);
             });
 
-            // Forçar re-renderização das fórmulas LaTeX recém inseridas
-            if (window.MathJax) {
-                MathJax.typesetPromise();
-            }
+            if (window.MathJax) MathJax.typesetPromise();
         }
 
         let charts = {};
         function renderCharts(data, limit) {
-            // Exibir no gráfico um pouco além do limite para contexto, mas focando nos classificados
+            // Filtra apenas deferidos para os gráficos para não poluir
+            const validData = data.filter(d => d.isDeferred !== false);
+            
             const displayCount = Math.max(limit + 5, 10);
-            const topData = data.slice(0, displayCount);
+            const topData = validData.slice(0, displayCount);
             const labels = topData.map(d => `${d.rank}º ${d.originalName.substring(0, 15)}...`);
 
             const ctx1 = document.getElementById('rankingChart').getContext('2d');
@@ -619,20 +827,15 @@
                 type: 'scatter',
                 data: {
                     datasets: [{
-                        label: 'Solicitações',
-                        data: data.map(d => ({ x: d.FIi, y: d.QIi, name: d.originalName, resp: d.resp })),
-                        // Cor baseada no limite dinâmico
-                        backgroundColor: data.map(d => d.rank <= limit ? '#004388':'#94a3b8')
+                        label: 'Solicitações (Deferidas)',
+                        data: validData.map(d => ({ x: d.FIi, y: d.QIi, name: d.originalName, resp: d.resp })),
+                        backgroundColor: validData.map(d => d.rank <= limit ? '#004388':'#94a3b8')
                     }]
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false,
                     plugins: {
-                        tooltip: {
-                            callbacks: {
-                                label: ctx => `${ctx.raw.name}: (${ctx.raw.x.toFixed(2)}, ${ctx.raw.y.toFixed(2)})`
-                            }
-                        }
+                        tooltip: { callbacks: { label: ctx => `${ctx.raw.name}: (${ctx.raw.x.toFixed(2)}, ${ctx.raw.y.toFixed(2)})` } }
                     },
                     scales: { x: {title:{display:true, text:'FI'}, min:0, max:1.1}, y: {title:{display:true, text:'QI'}, min:0, max:1.1} }
                 }
