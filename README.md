@@ -1,6 +1,6 @@
 # Sistema Integrado de Alocação de Vagas Docentes - UFRRJ
 
-**Versão:** 2.7.0 (Edital CEPE 2025)
+**Versão:** 3.1.0 (Edital CEPE 2025)
 
 **Responsável:** Pró-Reitoria de Planejamento, Avaliação e Desenvolvimento Institucional (PROPLADI)
 
