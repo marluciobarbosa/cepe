@@ -30,10 +30,15 @@
     <title>Sistema Integrado de Alocação de Vagas Docentes - UFRRJ (CEPE)</title>
     
     <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- <script src="https://cdn.tailwindcss.com"></script> -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+      @theme {
+        --color-clifford: #da373d;
+      }
+    </style>
     
     <!-- MathJax -->
-    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     
     <!-- PapaParse (CSV) -->
@@ -635,7 +640,11 @@
         function mergeDatasetsFIFO(quantList, qualMap, deferralMap) {
             const merged = [];
             let maxWi = 0;
-            quantList.forEach(item => { if (item.Wi > maxWi) maxWi = item.Wi; });
+            quantList.forEach(item => {
+                let def = true;
+                if (deferralMap && deferralMap.hasOwnProperty(item.name)) def = deferralMap[item.name];
+                if (def && item.Wi > maxWi) maxWi = item.Wi;
+            }); 
 
             quantList.forEach(quantItem => {
                 const key = quantItem.name;
@@ -774,11 +783,12 @@
                     </td>
                     
                     <td class="px-2 py-2 text-right font-bold text-slate-800 bg-slate-50 border-r border-slate-300">
-                        ${fmt(row.totalScore)}
+                        ${(row.isDeferred) ? fmt(row.totalScore) : '<center>-</center>'}
                         ${(!isRejected && row.rank <= limit) ? '<span class="ml-1 text-[8px] align-top text-[#008237] font-bold">★</span>' : ''}
                     </td>
-                    <td class="px-2 py-2 text-right font-mono text-slate-500 border-r border-slate-200">${fmt4(row.FIi)}</td>
-                    <td class="px-2 py-2 text-right font-mono text-slate-500 border-r border-slate-200">${fmt4(row.QIi)}</td>
+                    
+                    <td class="px-2 py-2 text-right font-mono text-slate-500 border-r border-slate-200">${(row.isDeferred) ? fmt4(row.FIi) : '<center>-</center>'}</td>
+                    <td class="px-2 py-2 text-right font-mono text-slate-500 border-r border-slate-200">${(row.isDeferred) ? fmt4(row.QIi) : '<center>-</center>'}</td>
                     
                     <td class="px-2 py-2 text-right font-mono text-slate-600 bg-slate-50 border-r border-slate-200">${fmt(row.raw.chdeg)}</td>
                     <td class="px-2 py-2 text-right font-mono text-slate-600 bg-slate-50 border-r border-slate-200">${fmt(row.raw.chdpg)}</td>
